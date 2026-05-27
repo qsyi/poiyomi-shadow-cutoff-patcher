@@ -1,5 +1,7 @@
 # Poiyomi Shadow Cutoff Patcher
 
+最終更新: 2026-05-28 / 対象 Poiyomi Pro 10.0.10
+
 Poiyomi Pro の ShadowCaster パスに独立した Alpha Cutoff を追加するパッチャーです。  
 透明マテリアルが影や SSAO に影響しないよう、Shadow パスのみ Cutoff を上書きできるようになります。
 
