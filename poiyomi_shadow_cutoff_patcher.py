@@ -41,7 +41,7 @@ def already_patched(lines):
 
 def find_props_insert_line(lines):
     for i, l in enumerate(lines):
-        if 'm_end_StencilPassOptions' in l and i < 6000:
+        if 'm_end_StencilPassOptions' in l:
             return i
     raise RuntimeError("Properties の挿入ポイントが見つかりませんでした (m_end_StencilPassOptions)")
 
@@ -54,18 +54,16 @@ def find_shadow_pass_start(lines):
 
 
 def find_vars_insert_line(lines, shadow_start):
-    for i in range(shadow_start, min(shadow_start + 9000, len(lines))):
+    for i in range(shadow_start, len(lines)):
         if lines[i].strip() == 'float _Cutoff;':
             return i
     raise RuntimeError("ShadowCaster pass 内の float _Cutoff; が見つかりませんでした")
 
 
 def find_clip_line(lines, shadow_start):
-    for i in range(shadow_start + 3000, len(lines)):
-        if 'applyUnityFog' in lines[i]:
-            clip_idx = i - 2
-            if 'clip(poiFragData.alpha - _Cutoff);' in lines[clip_idx]:
-                return clip_idx
+    for i in range(shadow_start, len(lines)):
+        if 'clip(poiFragData.alpha - _Cutoff);' in lines[i]:
+            return i
     raise RuntimeError("ShadowCaster pass 内の clip(poiFragData.alpha - _Cutoff); が見つかりませんでした")
 
 
@@ -89,6 +87,12 @@ def patch(shader_path, log):
     vars_idx     = find_vars_insert_line(lines, shadow_start)
     clip_idx     = find_clip_line(lines, shadow_start)
 
+    if not (props_idx < vars_idx < clip_idx):
+        raise RuntimeError(
+            "挿入ポイントの順序が不正です（バージョン非対応の可能性があります）\n"
+            f"  Props={props_idx+1}, Vars={vars_idx+1}, Clip={clip_idx+1}"
+        )
+
     log(f"  挿入ポイント: Properties={props_idx+1}, Variables={vars_idx+1}, Clip={clip_idx+1}")
 
     lines[clip_idx] = CLIP_NEW
@@ -103,6 +107,14 @@ def patch(shader_path, log):
     log("  'Shadow Caster Cutoff' セクションが表示されます。")
 
 
+HINT_TEXT = (
+    "Poiyomi Pro.shader をドロップ またはクリックして選択\n\n"
+    "シェーダーの場所 (どちらか):\n"
+    "Assets\\_PoiyomiShaders\\Shaders\\10.0\\Pro\\Poiyomi Pro.shader\n"
+    "Packages\\com.poiyomi.pro\\_PoiyomiShaders\\Shaders\\10.0\\Pro\\Poiyomi Pro.shader"
+)
+
+
 class App(TkinterDnD.Tk):
     def __init__(self):
         super().__init__()
@@ -110,18 +122,12 @@ class App(TkinterDnD.Tk):
         self.geometry("720x360")
         self.resizable(False, False)
         self.configure(bg="#1e1e1e")
+        self.lift()
 
         drop_font = tkfont.Font(family="Arial", size=11)
-        hint = (
-            "Poiyomi Pro.shader をドロップ またはクリックして選択\n\n"
-            "シェーダーの場所 (どちらか):\n"
-            "Assets\\_PoiyomiShaders\\Shaders\\10.0\\Pro\\Poiyomi Pro.shader\n"
-            "Packages\\com.poiyomi.pro\\_PoiyomiShaders\\Shaders\\10.0\\Pro\\Poiyomi Pro.shader"
-        )
-        self.hint_text = hint
         self.drop_label = tk.Label(
             self,
-            text=hint,
+            text=HINT_TEXT,
             bg="#2d2d2d", fg="#cccccc",
             font=drop_font,
             relief="flat",
@@ -146,17 +152,28 @@ class App(TkinterDnD.Tk):
         self.log_box.see(tk.END)
         self.log_box.configure(state=tk.DISABLED)
 
+    def _log_separator(self):
+        self.log_box.configure(state=tk.NORMAL)
+        self.log_box.insert(tk.END, "─" * 40 + "\n")
+        self.log_box.see(tk.END)
+        self.log_box.configure(state=tk.DISABLED)
+
+    def _reset_label(self):
+        self.drop_label.configure(text=HINT_TEXT)
+
     def _on_click(self, event):
         path = filedialog.askopenfilename(
             title="Poiyomi Pro.shader を選択",
             filetypes=[("Shader files", "*.shader"), ("All files", "*.*")],
         )
         if path:
-            self.drop_label.configure(text="処理中...")
-            threading.Thread(target=self._run, args=(path,), daemon=True).start()
+            self._start(path)
 
     def _on_drop(self, event):
         raw = event.data.strip()
+        if ' ' in raw and not raw.startswith('{'):
+            self._log("複数ファイルのドロップには対応していません。1ファイルずつ処理してください。")
+            return
         if raw.startswith('{') and raw.endswith('}'):
             path = raw[1:-1]
         else:
@@ -164,6 +181,10 @@ class App(TkinterDnD.Tk):
         if not path.lower().endswith('.shader'):
             self._log(f"スキップ: .shader ファイルをドロップしてください ({path})")
             return
+        self._start(path)
+
+    def _start(self, path):
+        self._log_separator()
         self.drop_label.configure(text="処理中...")
         threading.Thread(target=self._run, args=(path,), daemon=True).start()
 
@@ -174,6 +195,7 @@ class App(TkinterDnD.Tk):
         except Exception as e:
             self._log(f"エラー: {e}")
             self.after(0, lambda: self.drop_label.configure(text="エラーが発生しました\nログを確認してください"))
+        self.after(2000, self._reset_label)
 
 
 if __name__ == '__main__':
