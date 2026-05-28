@@ -2,8 +2,10 @@
 
 最終更新: 2026-05-28 / 対象 Poiyomi Pro 10.0.10
 
-Poiyomi Pro の ShadowCaster パスに独立した Alpha Cutoff を追加するパッチャーです。  
-透明マテリアルが影や SSAO に影響しないよう、Shadow パスのみ Cutoff を上書きできるようになります。
+半透明オブジェクトの後ろにあるオブジェクトが SSAO によって真っ黒になる問題を解決するパッチャーです。
+
+Poiyomi Pro は半透明マテリアルでも ShadowCaster パスを通じて SSAO に影響を与えるため、透明なはずの部分の奥にあるオブジェクトが黒く潰れて見えることがあります。  
+このツールは Poiyomi Pro.shader に Shadow パス専用の Alpha Cutoff を追加し、マテリアルごとに SSAO への影響をカットオフできるようにします。
 
 > **Note:** Poiyomi Pro の有効なライセンスが必要です。シェーダー本体はこのツールに含まれておらず、再配布もしていません。
 
